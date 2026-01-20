@@ -1162,7 +1162,7 @@ function generateBillPreview() {
     }
 
     const now = new Date();
-    const billNumber = `BILL-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${bills.length + 1}`;
+    const billNumber = `AM-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${bills.length + 1}`;
     
     const billContent = document.getElementById('billContent');
     billContent.innerHTML = `
@@ -1764,5 +1764,6 @@ window.deleteBill = deleteBill;
 window.deleteAllSales = deleteAllSales;
 
 window.viewBillDetails = viewBillDetails;
+
 
 
