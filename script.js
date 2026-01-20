@@ -1168,7 +1168,7 @@ function generateBillPreview() {
     billContent.innerHTML = `
         <div class="bill-header-no-logo">
             <div class="bill-clinic-info">
-                <h2>ANASUYA MEDICALS & FANCY</h2>
+                <h2>ANASUYA MEDICALS/h2>
                 <p>D.No. 26/3/1564, Near GVRR College,
 B.V. Nagar, Nellore - 524 004.</p>
                 <p>Phone: +91 8309303688 | Email: anasuyamedicals242@gmail.com</p>
@@ -1762,4 +1762,5 @@ window.deletePurchase = deletePurchase;
 window.deleteAllPurchases = deleteAllPurchases;
 window.deleteBill = deleteBill;
 window.deleteAllSales = deleteAllSales;
+
 window.viewBillDetails = viewBillDetails;
