@@ -69,7 +69,6 @@ let medicines = JSON.parse(localStorage.getItem('clinic_medicines')) || [
         category: "Antibiotic",
         minStock: 15,
         lastPurchaseDate: "2026-01-21",
-        lastSaleDate: null
     }
 ];
 let bills = JSON.parse(localStorage.getItem('clinic_bills')) || [];
@@ -80,6 +79,7 @@ let itemCounter = 1;
 let purchaseItemCounter = 1;
 let editingMedicineId = null;
 let editingBillItemSno = null;
+let editingPatientId = null;
 let selectedMedicines = [];
 let selectedSales = [];
 let medicineSearchTimeout;
@@ -93,6 +93,9 @@ const medicineModalTitle = document.getElementById('medicineModalTitle');
 const saveMedicineBtn = document.getElementById('saveMedicineBtn');
 const viewPurchaseModal = document.getElementById('viewPurchaseModal');
 const purchaseDetailsContent = document.getElementById('purchaseDetailsContent');
+const patientEditModal = document.getElementById('patientEditModal');
+const patientModalTitle = document.getElementById('patientModalTitle');
+const savePatientBtn = document.getElementById('savePatientBtn');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -459,6 +462,9 @@ function initializeEventListeners() {
             checkboxes.forEach(cb => cb.checked = this.checked);
         });
     }
+    
+    // Save patient button
+    savePatientBtn?.addEventListener('click', savePatient);
     
     // Initialize inline editing
     initializeInlineEditing();
@@ -1354,6 +1360,7 @@ function generateBillPreview() {
     const doctorName = document.getElementById('doctorName').value;
     const patientAge = document.getElementById('patientAge').value;
     const patientGender = document.getElementById('patientGender').value;
+    const patientPhone = document.getElementById('patientPhone').value;
     const paymentMode = document.getElementById('paymentMode').value;
     const discountValue = parseFloat(document.getElementById('discount').value) || 0;
     const total = currentBillItems.reduce((sum, item) => sum + item.amount, 0);
@@ -1384,6 +1391,7 @@ B.V. Nagar, Nellore - 524 004.</p>
         
         <div class="bill-details">
             <p><strong>Patient:</strong> ${patientName} | <strong>Age:</strong> ${patientAge} | <strong>Gender:</strong> ${patientGender}</p>
+            ${patientPhone ? `<p><strong>Phone:</strong> ${patientPhone}</p>` : ''}
             <p><strong>Doctor:</strong> ${doctorName}</p>
             <p><strong>Payment Mode:</strong> ${paymentMode}</p>
         </div>
@@ -1436,6 +1444,7 @@ function saveBill() {
     const doctorName = document.getElementById('doctorName').value;
     const patientAge = document.getElementById('patientAge').value;
     const patientGender = document.getElementById('patientGender').value;
+    const patientPhone = document.getElementById('patientPhone').value;
     const patientAddress = document.getElementById('patientAddress').value;
     const paymentMode = document.getElementById('paymentMode').value;
     const discountValue = parseFloat(document.getElementById('discount').value) || 0;
@@ -1456,7 +1465,7 @@ function saveBill() {
         }
     });
 
-    const billNumber = `BILL-${new Date().getFullYear()}${String(new Date().getMonth()+1).padStart(2,'0')}${String(new Date().getDate()).padStart(2,'0')}-${bills.length + 1}`;
+    const billNumber = `AM-${new Date().getFullYear()}${String(new Date().getMonth()+1).padStart(2,'0')}${String(new Date().getDate()).padStart(2,'0')}-${bills.length + 1}`;
     
     const bill = {
         id: bills.length + 1,
@@ -1466,6 +1475,7 @@ function saveBill() {
         doctorName,
         patientAge,
         patientGender,
+        patientPhone,
         patientAddress,
         paymentMode,
         discount: discountValue,
@@ -1475,17 +1485,24 @@ function saveBill() {
 
     bills.push(bill);
     
-    // Save patient if new
-    if (!patients.find(p => p.name.toLowerCase() === patientName.toLowerCase())) {
+    // Save patient if new or update existing
+    const existingPatientIndex = patients.findIndex(p => p.name.toLowerCase() === patientName.toLowerCase());
+    if (existingPatientIndex === -1) {
+        // Add new patient
         patients.push({
             id: patients.length + 1,
             name: patientName,
             age: patientAge,
             gender: patientGender,
+            phone: patientPhone,
             address: patientAddress,
-            phone: '',
             lastVisit: new Date().toISOString()
         });
+    } else {
+        // Update existing patient
+        patients[existingPatientIndex].lastVisit = new Date().toISOString();
+        patients[existingPatientIndex].phone = patientPhone || patients[existingPatientIndex].phone;
+        patients[existingPatientIndex].address = patientAddress || patients[existingPatientIndex].address;
     }
 
     // Save to localStorage
@@ -1516,6 +1533,7 @@ function clearBill() {
     document.getElementById('doctorName').value = '';
     document.getElementById('patientAge').value = '';
     document.getElementById('patientGender').value = '';
+    document.getElementById('patientPhone').value = '';
     document.getElementById('patientAddress').value = '';
     document.getElementById('discount').value = '0';
     document.getElementById('paymentMode').value = 'Cash';
@@ -1909,7 +1927,58 @@ function deleteSelectedPatients() {
 
 // Edit patient
 function editPatient(id) {
-    alert('Edit patient feature coming soon');
+    const patient = patients.find(p => p.id === id);
+    if (!patient) return;
+    
+    editingPatientId = id;
+    patientModalTitle.textContent = 'Edit Patient';
+    
+    // Populate form with patient data
+    document.getElementById('editPatientId').value = patient.id;
+    document.getElementById('editPatientName').value = patient.name;
+    document.getElementById('editPatientAge').value = patient.age || '';
+    document.getElementById('editPatientGender').value = patient.gender || '';
+    document.getElementById('editPatientPhone').value = patient.phone || '';
+    document.getElementById('editPatientAddress').value = patient.address || '';
+    
+    patientEditModal.classList.add('active');
+}
+
+// Save patient changes
+function savePatient() {
+    const patientId = parseInt(document.getElementById('editPatientId').value);
+    const patientName = document.getElementById('editPatientName').value;
+    const patientAge = document.getElementById('editPatientAge').value;
+    const patientGender = document.getElementById('editPatientGender').value;
+    const patientPhone = document.getElementById('editPatientPhone').value;
+    const patientAddress = document.getElementById('editPatientAddress').value;
+
+    if (!patientName) {
+        alert('Patient name is required');
+        return;
+    }
+
+    // Find patient index
+    const patientIndex = patients.findIndex(p => p.id === patientId);
+    if (patientIndex === -1) {
+        alert('Patient not found');
+        return;
+    }
+
+    // Update patient data
+    patients[patientIndex] = {
+        ...patients[patientIndex],
+        name: patientName,
+        age: patientAge,
+        gender: patientGender,
+        phone: patientPhone,
+        address: patientAddress
+    };
+
+    localStorage.setItem('clinic_patients', JSON.stringify(patients));
+    patientEditModal.classList.remove('active');
+    loadPatientsTable();
+    showToast('Patient updated successfully!', 'success');
 }
 
 // View patient details
@@ -1935,3 +2004,4 @@ window.viewBillDetails = viewBillDetails;
 window.editMedicineItem = editMedicineItem;
 window.deleteSale = deleteSale;
 window.updateSelectedSales = updateSelectedSales;
+window.savePatient = savePatient;
