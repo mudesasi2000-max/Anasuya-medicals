@@ -235,18 +235,24 @@ B.V. Nagar, Nellore - 524 004.
             </div>
         </section>
 
-        <!-- Sales Section -->
+        <!-- Sales Section (Updated with Delete Button) -->
         <section id="sales" class="section">
             <h2><i class="fas fa-chart-line"></i> Sales Report</h2>
-            <div class="filter-controls">
-                <input type="date" id="salesStartDate">
-                <input type="date" id="salesEndDate">
-                <button id="filterSalesBtn" class="btn-secondary">Filter</button>
+            <div class="section-actions">
+                <div class="filter-controls">
+                    <input type="date" id="salesStartDate">
+                    <input type="date" id="salesEndDate">
+                    <button id="filterSalesBtn" class="btn-secondary">Filter</button>
+                    <button id="deleteSelectedSalesBtn" class="btn-danger">
+                        <i class="fas fa-trash"></i> Delete Selected
+                    </button>
+                </div>
             </div>
             <div class="table-container">
                 <table class="data-table">
                     <thead>
                         <tr>
+                            <th><input type="checkbox" id="selectAllSales"></th>
                             <th>Bill No.</th>
                             <th>Date</th>
                             <th>Patient Name</th>
@@ -254,6 +260,7 @@ B.V. Nagar, Nellore - 524 004.
                             <th>Items</th>
                             <th>Total Amount</th>
                             <th>Payment Mode</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="salesTable">
