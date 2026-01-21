@@ -79,6 +79,7 @@ let currentPurchaseItems = [];
 let itemCounter = 1;
 let purchaseItemCounter = 1;
 let editingMedicineId = null;
+let editingBillItemSno = null;
 let selectedMedicines = [];
 let medicineSearchTimeout;
 
@@ -96,7 +97,7 @@ const purchaseDetailsContent = document.getElementById('purchaseDetailsContent')
 document.addEventListener('DOMContentLoaded', () => {
     initializeNavigation();
     initializeEventListeners();
-    initializeMedicineSearch(); // Initialize medicine search
+    initializeMedicineSearch();
     updateMedicineSelect();
     updateTotal();
     loadPatientsTable();
@@ -143,8 +144,13 @@ function initializePurchaseSection() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('purchaseDate').value = today;
     
-    // Add purchase item
-    document.getElementById('addPurchaseItemBtn')?.addEventListener('click', addPurchaseItem);
+    // Add purchase item - FIXED: Ensure event listener is attached
+    const addPurchaseItemBtn = document.getElementById('addPurchaseItemBtn');
+    if (addPurchaseItemBtn) {
+        // Remove any existing event listeners to avoid duplicates
+        addPurchaseItemBtn.removeEventListener('click', addPurchaseItem);
+        addPurchaseItemBtn.addEventListener('click', addPurchaseItem);
+    }
     
     // Save purchase
     document.getElementById('savePurchaseBtn')?.addEventListener('click', savePurchase);
@@ -361,6 +367,11 @@ document.head.appendChild(style);
 function initializeEventListeners() {
     // Add medicine to bill (modal button)
     document.getElementById('addMedicineBtn')?.addEventListener('click', () => {
+        editingBillItemSno = null;
+        document.getElementById('medicineModalTitle').textContent = 'Add Medicine to Bill';
+        document.getElementById('addMedToBillBtn').style.display = 'block';
+        document.getElementById('updateMedInBillBtn').style.display = 'none';
+        document.getElementById('addMedicineForm').reset();
         document.getElementById('addMedicineModal')?.classList.add('active');
     });
 
@@ -380,6 +391,9 @@ function initializeEventListeners() {
 
     // Add medicine to bill from modal
     document.getElementById('addMedToBillBtn')?.addEventListener('click', addMedicineToBill);
+    
+    // Update medicine in bill
+    document.getElementById('updateMedInBillBtn')?.addEventListener('click', updateMedicineInBill);
 
     // Discount calculation
     document.getElementById('discount')?.addEventListener('input', updateTotal);
@@ -445,17 +459,8 @@ function initializeEventListeners() {
         });
     }
     
-    // Delete all sales records button
-    const deleteAllSalesBtn = document.getElementById('deleteAllSalesBtn');
-    if (deleteAllSalesBtn) {
-        deleteAllSalesBtn.addEventListener('click', deleteAllSales);
-    }
-    
-    // Delete all purchases records button
-    const deleteAllPurchasesBtn = document.getElementById('deleteAllPurchasesBtn');
-    if (deleteAllPurchasesBtn) {
-        deleteAllPurchasesBtn.addEventListener('click', deleteAllPurchases);
-    }
+    // Filter sales button
+    document.getElementById('filterSalesBtn')?.addEventListener('click', loadSalesTable);
 }
 
 // Update medicine select dropdown in modal
@@ -531,6 +536,94 @@ function addMedicineToBill() {
     showToast(`${medicine.name} added to bill successfully!`, 'success');
 }
 
+// Update medicine in bill
+function updateMedicineInBill() {
+    const sno = parseInt(document.getElementById('editItemSno').value);
+    const medId = parseInt(document.getElementById('medName').value);
+    const quantity = parseInt(document.getElementById('medQuantity').value);
+    const price = parseFloat(document.getElementById('medPrice').value);
+    const batchNo = document.getElementById('medBatch').value;
+    const expiryDate = document.getElementById('medExpiry').value;
+
+    if (!medId || quantity <= 0 || price <= 0) {
+        alert('Please fill all required fields correctly');
+        return;
+    }
+
+    // Find the item to update
+    const itemIndex = currentBillItems.findIndex(item => item.sno === sno);
+    if (itemIndex === -1) {
+        alert('Item not found');
+        return;
+    }
+
+    const oldItem = currentBillItems[itemIndex];
+    const medicine = medicines.find(m => m.id === medId);
+    if (!medicine) {
+        alert('Medicine not found');
+        return;
+    }
+
+    // Calculate stock difference
+    const quantityDifference = quantity - oldItem.quantity;
+    
+    // Check if there's enough stock for the increase
+    if (quantityDifference > 0 && medicine.quantity < quantityDifference) {
+        alert(`Insufficient stock! Available: ${medicine.quantity} ${medicine.unit}`);
+        return;
+    }
+
+    const amount = quantity * price;
+    
+    // Update the item
+    currentBillItems[itemIndex] = {
+        ...oldItem,
+        medId,
+        name: medicine.name,
+        batchNo,
+        expiryDate,
+        quantity,
+        price,
+        amount,
+        unit: medicine.unit
+    };
+
+    // Update medicine stock
+    medicine.quantity -= quantityDifference;
+    medicine.lastSaleDate = new Date().toISOString().split('T')[0];
+    localStorage.setItem('clinic_medicines', JSON.stringify(medicines));
+    
+    updateMedicineTable();
+    updateTotal();
+    
+    document.getElementById('addMedicineForm').reset();
+    document.getElementById('addMedicineModal').classList.remove('active');
+    editingBillItemSno = null;
+    
+    showToast(`${medicine.name} updated successfully!`, 'success');
+}
+
+// Edit medicine item in bill
+function editMedicineItem(sno) {
+    const item = currentBillItems.find(item => item.sno === sno);
+    if (!item) return;
+    
+    editingBillItemSno = sno;
+    document.getElementById('medicineModalTitle').textContent = 'Edit Medicine Item';
+    document.getElementById('addMedToBillBtn').style.display = 'none';
+    document.getElementById('updateMedInBillBtn').style.display = 'block';
+    document.getElementById('editItemSno').value = sno;
+    
+    // Populate form with item data
+    document.getElementById('medName').value = item.medId;
+    document.getElementById('medBatch').value = item.batchNo;
+    document.getElementById('medExpiry').value = item.expiryDate;
+    document.getElementById('medQuantity').value = item.quantity;
+    document.getElementById('medPrice').value = item.price;
+    
+    document.getElementById('addMedicineModal').classList.add('active');
+}
+
 // Update medicine table in billing section
 function updateMedicineTable() {
     const medicineItems = document.getElementById('medicineItems');
@@ -548,12 +641,23 @@ function updateMedicineTable() {
             <td>₹${item.price.toFixed(2)}</td>
             <td>₹${item.amount.toFixed(2)}</td>
             <td>
+                <button class="btn-secondary edit-bill-item" data-sno="${item.sno}">
+                    <i class="fas fa-edit"></i>
+                </button>
                 <button class="btn-danger remove-item" data-sno="${item.sno}">
                     <i class="fas fa-trash"></i>
                 </button>
             </td>
         `;
         medicineItems.appendChild(row);
+    });
+
+    // Add edit event listeners
+    document.querySelectorAll('.edit-bill-item').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const sno = parseInt(this.dataset.sno);
+            editMedicineItem(sno);
+        });
     });
 
     // Add remove event listeners
@@ -773,13 +877,14 @@ function deleteMedicine(id) {
 function addPurchaseItem() {
     const itemName = document.getElementById('newItemName').value;
     const batchNo = document.getElementById('newBatchNo').value;
+    const expiryDate = document.getElementById('newExpiryDate').value;
     const unit = document.getElementById('newUnit').value;
     const quantity = parseInt(document.getElementById('newQuantity').value);
     const purchaseRate = parseFloat(document.getElementById('newPurchaseRate').value);
     const mrp = parseFloat(document.getElementById('newMRP').value);
     
-    if (!itemName || !batchNo || quantity <= 0 || purchaseRate <= 0 || mrp <= 0) {
-        alert('Please fill all item details correctly');
+    if (!itemName || !batchNo || !expiryDate || quantity <= 0 || purchaseRate <= 0 || mrp <= 0) {
+        alert('Please fill all item details correctly including expiry date');
         return;
     }
     
@@ -788,6 +893,7 @@ function addPurchaseItem() {
         sno: purchaseItemCounter++,
         name: itemName,
         batchNo,
+        expiryDate: expiryDate,
         unit,
         quantity,
         purchaseRate,
@@ -801,6 +907,7 @@ function addPurchaseItem() {
     // Clear input fields
     document.getElementById('newItemName').value = '';
     document.getElementById('newBatchNo').value = '';
+    document.getElementById('newExpiryDate').value = '';
     document.getElementById('newQuantity').value = 1;
     document.getElementById('newPurchaseRate').value = '';
     document.getElementById('newMRP').value = '';
@@ -815,7 +922,7 @@ function updatePurchaseItemsTable() {
     if (currentPurchaseItems.length === 0) {
         tbody.innerHTML = `
             <tr id="noPurchaseItems">
-                <td colspan="9" class="text-center">No items added</td>
+                <td colspan="10" class="text-center">No items added</td>
             </tr>
         `;
         document.getElementById('purchaseTotal').textContent = '₹0.00';
@@ -830,6 +937,7 @@ function updatePurchaseItemsTable() {
             <td>${item.sno}</td>
             <td>${item.name}</td>
             <td>${item.batchNo}</td>
+            <td>${item.expiryDate}</td>
             <td>${item.unit}</td>
             <td>${item.quantity}</td>
             <td>₹${item.purchaseRate.toFixed(2)}</td>
@@ -892,6 +1000,7 @@ function savePurchase() {
             existingMed.quantity += item.quantity;
             existingMed.purchasePrice = item.purchaseRate;
             existingMed.mrp = item.mrp;
+            existingMed.expiryDate = item.expiryDate;
             existingMed.lastPurchaseDate = purchaseDate;
         } else {
             // Add new medicine
@@ -899,7 +1008,7 @@ function savePurchase() {
                 id: medicines.length + 1,
                 name: item.name,
                 batchNo: item.batchNo,
-                expiryDate: '2024-12-31',
+                expiryDate: item.expiryDate,
                 quantity: item.quantity,
                 purchasePrice: item.purchaseRate,
                 mrp: item.mrp,
@@ -933,6 +1042,7 @@ function clearPurchaseForm() {
     document.getElementById('receivedBy').value = '';
     document.getElementById('newItemName').value = '';
     document.getElementById('newBatchNo').value = '';
+    document.getElementById('newExpiryDate').value = '';
     document.getElementById('newQuantity').value = 1;
     document.getElementById('newPurchaseRate').value = '';
     document.getElementById('newMRP').value = '';
@@ -1017,21 +1127,6 @@ function deletePurchase(id) {
     }
 }
 
-// Delete all purchases
-function deleteAllPurchases() {
-    if (purchases.length === 0) {
-        alert('No purchase records to delete');
-        return;
-    }
-    
-    if (confirm(`Are you sure you want to delete ALL purchase records (${purchases.length} records)? This action cannot be undone.`)) {
-        purchases = [];
-        localStorage.setItem('clinic_purchases', JSON.stringify(purchases));
-        loadPurchasesHistory();
-        showToast('All purchase records deleted!', 'success');
-    }
-}
-
 function viewPurchaseDetails(purchaseId) {
     const purchase = purchases.find(p => p.id === purchaseId);
     if (!purchase) return;
@@ -1052,6 +1147,7 @@ function viewPurchaseDetails(purchaseId) {
                         <th>S.No</th>
                         <th>Item Name</th>
                         <th>Batch No.</th>
+                        <th>Expiry Date</th>
                         <th>Unit</th>
                         <th>Quantity</th>
                         <th>Purchase Rate</th>
@@ -1065,6 +1161,7 @@ function viewPurchaseDetails(purchaseId) {
                             <td>${item.sno}</td>
                             <td>${item.name}</td>
                             <td>${item.batchNo}</td>
+                            <td>${item.expiryDate}</td>
                             <td>${item.unit}</td>
                             <td>${item.quantity}</td>
                             <td>₹${item.purchaseRate.toFixed(2)}</td>
@@ -1075,7 +1172,7 @@ function viewPurchaseDetails(purchaseId) {
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td colspan="7" style="text-align: right;"><strong>Grand Total:</strong></td>
+                        <td colspan="8" style="text-align: right;"><strong>Grand Total:</strong></td>
                         <td><strong>₹${purchase.total.toFixed(2)}</strong></td>
                     </tr>
                 </tfoot>
@@ -1168,8 +1265,8 @@ function generateBillPreview() {
     billContent.innerHTML = `
         <div class="bill-header-no-logo">
             <div class="bill-clinic-info">
-                <h2>ANASUYA MEDICALS</h2>
-                <p>D.No. 26/3/1564, Raju Complex,
+                <h2>ANASUYA MEDICALS & FANCY</h2>
+                <p>D.No. 26/3/1564, Near GVRR College,
 B.V. Nagar, Nellore - 524 004.</p>
                 <p>Phone: +91 8309303688 | Email: anasuyamedicals242@gmail.com</p>
                 <hr style="margin: 0.5rem 0;">
@@ -1409,10 +1506,26 @@ function printBill() {
 
 // Load sales table with delete buttons
 function loadSalesTable() {
+    const startDate = document.getElementById('salesStartDate')?.value;
+    const endDate = document.getElementById('salesEndDate')?.value;
     const table = document.getElementById('salesTable');
+    
     if (!table) return;
     
-    table.innerHTML = bills.map(bill => `
+    let filteredBills = bills;
+    
+    if (startDate && endDate) {
+        filteredBills = bills.filter(bill => {
+            const billDate = new Date(bill.date);
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            end.setDate(end.getDate() + 1);
+            
+            return billDate >= start && billDate < end;
+        });
+    }
+    
+    table.innerHTML = filteredBills.map(bill => `
         <tr>
             <td>${bill.billNumber}</td>
             <td>${new Date(bill.date).toLocaleDateString()}</td>
@@ -1421,154 +1534,8 @@ function loadSalesTable() {
             <td>${bill.items.length} items</td>
             <td>₹${bill.total.toFixed(2)}</td>
             <td>${bill.paymentMode}</td>
-            <td>
-                <button class="btn-secondary btn-sm" onclick="viewBillDetails(${bill.id})">
-                    <i class="fas fa-eye"></i> View
-                </button>
-                <button class="btn-danger btn-sm" onclick="deleteBill(${bill.id})">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
-            </td>
         </tr>
-    `).join('') || '<tr><td colspan="8">No sales records found</td></tr>';
-}
-
-// Delete single bill
-function deleteBill(id) {
-    if (confirm('Are you sure you want to delete this bill? This will restore medicine quantities to inventory.')) {
-        const bill = bills.find(b => b.id === id);
-        if (!bill) return;
-        
-        // Restore medicine quantities
-        bill.items.forEach(item => {
-            const medicine = medicines.find(m => m.id === item.medId);
-            if (medicine) {
-                medicine.quantity += item.quantity;
-            }
-        });
-        
-        // Remove bill
-        bills = bills.filter(b => b.id !== id);
-        
-        // Update IDs
-        bills.forEach((b, index) => {
-            b.id = index + 1;
-        });
-        
-        localStorage.setItem('clinic_bills', JSON.stringify(bills));
-        localStorage.setItem('clinic_medicines', JSON.stringify(medicines));
-        
-        loadSalesTable();
-        loadMedicinesTable();
-        updateMedicineSelect();
-        checkExpiryAlerts();
-        showToast('Bill deleted successfully!', 'success');
-    }
-}
-
-// Delete all sales records
-function deleteAllSales() {
-    if (bills.length === 0) {
-        alert('No sales records to delete');
-        return;
-    }
-    
-    if (confirm(`Are you sure you want to delete ALL sales records (${bills.length} records)? This action cannot be undone.`)) {
-        bills = [];
-        localStorage.setItem('clinic_bills', JSON.stringify(bills));
-        loadSalesTable();
-        showToast('All sales records deleted!', 'success');
-    }
-}
-
-// View bill details
-function viewBillDetails(billId) {
-    const bill = bills.find(b => b.id === billId);
-    if (!bill) return;
-    
-    const total = bill.items.reduce((sum, item) => sum + item.amount, 0);
-    const discountAmount = total * (bill.discount / 100);
-    const final = total - discountAmount;
-    
-    const modalContent = `
-        <div class="bill-details-modal">
-            <h3>Bill Details: ${bill.billNumber}</h3>
-            <div class="detail-item">
-                <p><strong>Date:</strong> ${new Date(bill.date).toLocaleString()}</p>
-                <p><strong>Patient:</strong> ${bill.patientName} | <strong>Age:</strong> ${bill.patientAge} | <strong>Gender:</strong> ${bill.patientGender}</p>
-                <p><strong>Doctor:</strong> ${bill.doctorName}</p>
-                <p><strong>Payment Mode:</strong> ${bill.paymentMode}</p>
-                <p><strong>Discount:</strong> ${bill.discount}%</p>
-            </div>
-            
-            <h4>Items:</h4>
-            <table class="bill-items-table">
-                <thead>
-                    <tr>
-                        <th>S.No</th>
-                        <th>Medicine</th>
-                        <th>Batch No.</th>
-                        <th>Expiry</th>
-                        <th>Quantity</th>
-                        <th>Price</th>
-                        <th>Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${bill.items.map(item => `
-                        <tr>
-                            <td>${item.sno}</td>
-                            <td>${item.name}</td>
-                            <td>${item.batchNo}</td>
-                            <td>${item.expiryDate}</td>
-                            <td>${item.quantity} ${item.unit || ''}</td>
-                            <td>₹${item.price.toFixed(2)}</td>
-                            <td>₹${item.amount.toFixed(2)}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="6" style="text-align: right;"><strong>Sub Total:</strong></td>
-                        <td><strong>₹${total.toFixed(2)}</strong></td>
-                    </tr>
-                    <tr>
-                        <td colspan="6" style="text-align: right;"><strong>Discount (${bill.discount}%):</strong></td>
-                        <td><strong>₹${discountAmount.toFixed(2)}</strong></td>
-                    </tr>
-                    <tr>
-                        <td colspan="6" style="text-align: right;"><strong>Final Amount:</strong></td>
-                        <td><strong>₹${final.toFixed(2)}</strong></td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    `;
-    
-    // Create a modal for viewing bill details
-    const modal = document.createElement('div');
-    modal.className = 'modal active';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Bill Details</h2>
-                <button class="close-modal">&times;</button>
-            </div>
-            <div class="modal-body">
-                ${modalContent}
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary close-modal">Close</button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // Add close event listener
-    modal.querySelector('.close-modal').addEventListener('click', () => {
-        modal.remove();
-    });
+    `).join('') || '<tr><td colspan="7">No sales records found</td></tr>';
 }
 
 // Check expiry alerts
@@ -1759,11 +1726,5 @@ window.addNewPatient = addNewPatient;
 window.viewPatient = viewPatient;
 window.deletePatient = deletePatient;
 window.deletePurchase = deletePurchase;
-window.deleteAllPurchases = deleteAllPurchases;
-window.deleteBill = deleteBill;
-window.deleteAllSales = deleteAllSales;
-
 window.viewBillDetails = viewBillDetails;
-
-
-
+window.editMedicineItem = editMedicineItem;
