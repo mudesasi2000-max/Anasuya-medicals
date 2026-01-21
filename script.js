@@ -5,70 +5,70 @@ let medicines = JSON.parse(localStorage.getItem('clinic_medicines')) || [
         id: 1,
         name: "Paracetamol 500mg",
         batchNo: "BATCH001",
-        expiryDate: "2024-12-31",
+        expiryDate: "2026-01-21",
         quantity: 100,
         purchasePrice: 2.00,
         mrp: 2.50,
         unit: "Tablet",
         category: "Pain Relief",
         minStock: 20,
-        lastPurchaseDate: "2023-12-01",
+        lastPurchaseDate: "2026-01-21",
         lastSaleDate: null
     },
     {
         id: 2,
         name: "Amoxicillin 250mg",
         batchNo: "BATCH002",
-        expiryDate: "2024-06-30",
+        expiryDate: "2026-01-21",
         quantity: 50,
         purchasePrice: 4.50,
         mrp: 5.75,
         unit: "Capsule",
         category: "Antibiotic",
         minStock: 15,
-        lastPurchaseDate: "2023-11-15",
+        lastPurchaseDate: "2026-01-21",
         lastSaleDate: null
     },
     {
         id: 3,
         name: "Cetirizine 10mg",
         batchNo: "BATCH003",
-        expiryDate: "2024-08-15",
+        expiryDate: "2026-01-21",
         quantity: 80,
         purchasePrice: 1.50,
         mrp: 2.00,
         unit: "Tablet",
         category: "Allergy",
         minStock: 25,
-        lastPurchaseDate: "2023-12-10",
+        lastPurchaseDate: "2026-01-21",
         lastSaleDate: null
     },
     {
         id: 4,
         name: "Omeprazole 20mg",
         batchNo: "BATCH004",
-        expiryDate: "2024-10-20",
+        expiryDate: "2026-01-21",
         quantity: 60,
         purchasePrice: 3.00,
         mrp: 4.00,
         unit: "Capsule",
         category: "Acidity",
         minStock: 20,
-        lastPurchaseDate: "2023-11-25",
+        lastPurchaseDate: "2026-01-21",
         lastSaleDate: null
     },
     {
         id: 5,
         name: "Azithromycin 250mg",
         batchNo: "BATCH005",
-        expiryDate: "2024-09-30",
+        expiryDate: "2026-01-21",
         quantity: 40,
         purchasePrice: 8.00,
         mrp: 10.00,
         unit: "Tablet",
         category: "Antibiotic",
         minStock: 15,
-        lastPurchaseDate: "2023-12-05",
+        lastPurchaseDate: "2026-01-21",
         lastSaleDate: null
     }
 ];
@@ -81,6 +81,7 @@ let purchaseItemCounter = 1;
 let editingMedicineId = null;
 let editingBillItemSno = null;
 let selectedMedicines = [];
+let selectedSales = [];
 let medicineSearchTimeout;
 
 // DOM Elements
@@ -348,21 +349,6 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
-// Add CSS for toast animations
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-    
-    @keyframes slideOut {
-        from { transform: translateX(0); opacity: 1; }
-        to { transform: translateX(100%); opacity: 0; }
-    }
-`;
-document.head.appendChild(style);
-
 // Initialize event listeners
 function initializeEventListeners() {
     // Add medicine to bill (modal button)
@@ -461,6 +447,123 @@ function initializeEventListeners() {
     
     // Filter sales button
     document.getElementById('filterSalesBtn')?.addEventListener('click', loadSalesTable);
+    
+    // Delete selected sales button
+    document.getElementById('deleteSelectedSalesBtn')?.addEventListener('click', deleteSelectedSales);
+    
+    // Select all sales checkbox
+    const selectAllSales = document.getElementById('selectAllSales');
+    if (selectAllSales) {
+        selectAllSales.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.sale-checkbox');
+            checkboxes.forEach(cb => cb.checked = this.checked);
+        });
+    }
+    
+    // Initialize inline editing
+    initializeInlineEditing();
+}
+
+// Initialize inline editing for quantity
+function initializeInlineEditing() {
+    // Add event delegation for inline quantity editing
+    document.addEventListener('click', function(e) {
+        // Handle quantity display click
+        if (e.target.classList.contains('quantity-display')) {
+            const sno = parseInt(e.target.dataset.sno);
+            const item = currentBillItems.find(item => item.sno === sno);
+            if (item) {
+                const cell = e.target.parentElement;
+                const display = e.target;
+                
+                // Create input element
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.className = 'quantity-input';
+                input.value = item.quantity;
+                input.min = 1;
+                input.dataset.sno = sno;
+                input.style.width = '60px';
+                
+                // Replace display with input
+                display.style.display = 'none';
+                cell.appendChild(input);
+                input.focus();
+                
+                // Select the text
+                input.select();
+                
+                // Handle input events
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        updateQuantityFromInput(sno, input.value);
+                    } else if (e.key === 'Escape') {
+                        cancelQuantityEdit(sno);
+                    }
+                });
+                
+                input.addEventListener('blur', function() {
+                    updateQuantityFromInput(sno, input.value);
+                });
+            }
+        }
+    });
+}
+
+// Update quantity from inline input
+function updateQuantityFromInput(sno, newQuantity) {
+    const item = currentBillItems.find(item => item.sno === sno);
+    if (!item) return;
+    
+    newQuantity = parseInt(newQuantity);
+    if (isNaN(newQuantity) || newQuantity < 1) {
+        cancelQuantityEdit(sno);
+        return;
+    }
+    
+    const medicine = medicines.find(m => m.id === item.medId);
+    if (!medicine) {
+        cancelQuantityEdit(sno);
+        return;
+    }
+    
+    // Calculate difference
+    const oldQuantity = item.quantity;
+    const difference = newQuantity - oldQuantity;
+    
+    // Check stock
+    if (difference > 0 && medicine.quantity < difference) {
+        showToast(`Insufficient stock! Available: ${medicine.quantity} ${medicine.unit}`, 'error');
+        cancelQuantityEdit(sno);
+        return;
+    }
+    
+    // Update quantity
+    item.quantity = newQuantity;
+    item.amount = newQuantity * item.price;
+    
+    // Update medicine stock
+    medicine.quantity -= difference;
+    medicine.lastSaleDate = new Date().toISOString().split('T')[0];
+    localStorage.setItem('clinic_medicines', JSON.stringify(medicines));
+    
+    // Update UI
+    updateMedicineTable();
+    updateTotal();
+    showToast(`${item.name} quantity updated to ${newQuantity}`, 'success');
+}
+
+// Cancel inline editing
+function cancelQuantityEdit(sno) {
+    const input = document.querySelector(`.quantity-input[data-sno="${sno}"]`);
+    const display = document.querySelector(`.quantity-display[data-sno="${sno}"]`);
+    
+    if (input) {
+        input.remove();
+    }
+    if (display) {
+        display.style.display = 'inline';
+    }
 }
 
 // Update medicine select dropdown in modal
@@ -637,7 +740,11 @@ function updateMedicineTable() {
             <td>${item.name}</td>
             <td>${item.batchNo}</td>
             <td>${item.expiryDate}</td>
-            <td>${item.quantity} ${item.unit || ''}</td>
+            <td>
+                <span class="quantity-display" data-sno="${item.sno}" style="cursor: pointer;">
+                    ${item.quantity} ${item.unit || ''}
+                </span>
+            </td>
             <td>₹${item.price.toFixed(2)}</td>
             <td>₹${item.amount.toFixed(2)}</td>
             <td>
@@ -1527,6 +1634,9 @@ function loadSalesTable() {
     
     table.innerHTML = filteredBills.map(bill => `
         <tr>
+            <td>
+                <input type="checkbox" class="sale-checkbox" value="${bill.id}" onchange="updateSelectedSales()">
+            </td>
             <td>${bill.billNumber}</td>
             <td>${new Date(bill.date).toLocaleDateString()}</td>
             <td>${bill.patientName}</td>
@@ -1534,8 +1644,103 @@ function loadSalesTable() {
             <td>${bill.items.length} items</td>
             <td>₹${bill.total.toFixed(2)}</td>
             <td>${bill.paymentMode}</td>
+            <td class="action-buttons-small">
+                <button class="btn-secondary btn-sm" onclick="viewBillDetails(${bill.id})" title="View Details">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn-danger btn-sm" onclick="deleteSale(${bill.id})" title="Delete">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
         </tr>
-    `).join('') || '<tr><td colspan="7">No sales records found</td></tr>';
+    `).join('') || '<tr><td colspan="9">No sales records found</td></tr>';
+}
+
+// Function to update selected sales
+function updateSelectedSales() {
+    selectedSales = [];
+    document.querySelectorAll('.sale-checkbox:checked').forEach(cb => {
+        selectedSales.push(parseInt(cb.value));
+    });
+    
+    // Update select all checkbox
+    const allCheckboxes = document.querySelectorAll('.sale-checkbox');
+    const checkedCheckboxes = document.querySelectorAll('.sale-checkbox:checked');
+    const selectAllSales = document.getElementById('selectAllSales');
+    if (selectAllSales && allCheckboxes.length > 0) {
+        selectAllSales.checked = allCheckboxes.length === checkedCheckboxes.length;
+    }
+}
+
+// Function to delete selected sales
+function deleteSelectedSales() {
+    if (selectedSales.length === 0) {
+        alert('Please select sales to delete');
+        return;
+    }
+    
+    if (confirm(`Are you sure you want to delete ${selectedSales.length} selected sale(s)? This will restore medicine quantities.`)) {
+        selectedSales.forEach(id => {
+            deleteSale(id, false); // Don't show individual confirmations
+        });
+        
+        selectedSales = [];
+        document.getElementById('selectAllSales').checked = false;
+        loadSalesTable();
+        loadMedicinesTable();
+        showToast(`${selectedSales.length} sale(s) deleted successfully!`, 'success');
+    }
+}
+
+// Function to delete single sale
+function deleteSale(id, showConfirmation = true) {
+    if (showConfirmation && !confirm('Are you sure you want to delete this sale? This will restore medicine quantities.')) {
+        return;
+    }
+    
+    const bill = bills.find(b => b.id === id);
+    if (!bill) return;
+    
+    // Restore medicine quantities
+    bill.items.forEach(item => {
+        const medicine = medicines.find(m => m.id === item.medId);
+        if (medicine) {
+            medicine.quantity += item.quantity;
+        }
+    });
+    
+    // Remove bill
+    bills = bills.filter(b => b.id !== id);
+    
+    // Update IDs
+    bills.forEach((b, index) => {
+        b.id = index + 1;
+    });
+    
+    // Update localStorage
+    localStorage.setItem('clinic_bills', JSON.stringify(bills));
+    localStorage.setItem('clinic_medicines', JSON.stringify(medicines));
+    
+    // Refresh tables
+    loadSalesTable();
+    loadMedicinesTable();
+    updateMedicineSelect();
+    
+    if (showConfirmation) {
+        showToast('Sale deleted successfully!', 'success');
+    }
+}
+
+// Function to view bill details
+function viewBillDetails(id) {
+    const bill = bills.find(b => b.id === id);
+    if (!bill) return;
+    
+    const itemsList = bill.items.map(item => 
+        `${item.name} (${item.quantity} ${item.unit || ''}) - ₹${item.amount.toFixed(2)}`
+    ).join('\n');
+    
+    alert(`Bill Details:\n\nBill No: ${bill.billNumber}\nDate: ${new Date(bill.date).toLocaleDateString()}\nPatient: ${bill.patientName}\nDoctor: ${bill.doctorName}\nPayment Mode: ${bill.paymentMode}\nDiscount: ${bill.discount}%\n\nItems:\n${itemsList}\n\nTotal: ₹${bill.total.toFixed(2)}`);
 }
 
 // Check expiry alerts
@@ -1728,3 +1933,5 @@ window.deletePatient = deletePatient;
 window.deletePurchase = deletePurchase;
 window.viewBillDetails = viewBillDetails;
 window.editMedicineItem = editMedicineItem;
+window.deleteSale = deleteSale;
+window.updateSelectedSales = updateSelectedSales;
