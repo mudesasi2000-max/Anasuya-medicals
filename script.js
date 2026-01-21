@@ -1355,6 +1355,9 @@ function loadStockReport() {
 }
 
 // Generate bill preview
+// ... (rest of the code remains the same until generateBillPreview function) ...
+
+// Generate bill preview
 function generateBillPreview() {
     const patientName = document.getElementById('patientName').value;
     const doctorName = document.getElementById('doctorName').value;
@@ -1375,6 +1378,38 @@ function generateBillPreview() {
     const now = new Date();
     const billNumber = `AM-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${bills.length + 1}`;
     
+    // Build patient details dynamically
+    let patientDetailsHTML = `
+        <p><strong>Patient:</strong> ${patientName}</p>
+        <p><strong>Doctor:</strong> ${doctorName}</p>
+    `;
+    
+    // Add other patient information only if available
+    const patientInfoItems = [];
+    
+    if (patientAge && patientAge.trim() !== '') {
+        patientInfoItems.push(`<strong>Age:</strong> ${patientAge}`);
+    }
+    
+    if (patientGender && patientGender.trim() !== '') {
+        patientInfoItems.push(`<strong>Gender:</strong> ${patientGender}`);
+    }
+    
+    if (patientInfoItems.length > 0) {
+        patientDetailsHTML = `
+            <p><strong>Patient:</strong> ${patientName} | ${patientInfoItems.join(' | ')}</p>
+            <p><strong>Doctor:</strong> ${doctorName}</p>
+        `;
+    }
+    
+    // Add phone if available
+    if (patientPhone && patientPhone.trim() !== '') {
+        patientDetailsHTML += `<p><strong>Phone:</strong> ${patientPhone}</p>`;
+    }
+    
+    // Add payment mode
+    patientDetailsHTML += `<p><strong>Payment Mode:</strong> ${paymentMode}</p>`;
+    
     const billContent = document.getElementById('billContent');
     billContent.innerHTML = `
         <div class="bill-header-no-logo">
@@ -1390,10 +1425,7 @@ B.V. Nagar, Nellore - 524 004.</p>
         </div>
         
         <div class="bill-details">
-            <p><strong>Patient:</strong> ${patientName} | <strong>Age:</strong> ${patientAge} | <strong>Gender:</strong> ${patientGender}</p>
-            ${patientPhone ? `<p><strong>Phone:</strong> ${patientPhone}</p>` : ''}
-            <p><strong>Doctor:</strong> ${doctorName}</p>
-            <p><strong>Payment Mode:</strong> ${paymentMode}</p>
+            ${patientDetailsHTML}
         </div>
         
         <table class="bill-table">
@@ -1425,7 +1457,7 @@ B.V. Nagar, Nellore - 524 004.</p>
         
         <div class="bill-total">
             <p><strong>Sub Total:</strong> ₹${total.toFixed(2)}</p>
-            <p><strong>Discount (${discountValue}%):</strong> ₹${discountAmount.toFixed(2)}</p>
+            ${discountValue > 0 ? `<p><strong>Discount (${discountValue}%):</strong> ₹${discountAmount.toFixed(2)}</p>` : ''}
             <p><strong>Final Amount:</strong> ₹${final.toFixed(2)}</p>
             <p style="margin-top: 1rem;"><strong>Amount in Words:</strong> ${numberToWords(final)}</p>
         </div>
@@ -1438,6 +1470,7 @@ B.V. Nagar, Nellore - 524 004.</p>
     document.getElementById('billPreviewModal').classList.add('active');
 }
 
+// ... (rest of the code remains the same) ...
 // Save bill
 function saveBill() {
     const patientName = document.getElementById('patientName').value;
