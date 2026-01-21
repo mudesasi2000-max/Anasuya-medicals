@@ -15,6 +15,7 @@ let medicines = JSON.parse(localStorage.getItem('clinic_medicines')) || [
         lastPurchaseDate: "2026-01-21",
         lastSaleDate: null
     },
+
     {
         id: 2,
         name: "Amoxicillin 250mg",
@@ -1364,51 +1365,57 @@ function generateBillPreview() {
     const patientAge = document.getElementById('patientAge').value;
     const patientGender = document.getElementById('patientGender').value;
     const patientPhone = document.getElementById('patientPhone').value;
+    const patientAddress = document.getElementById('patientAddress').value;
     const paymentMode = document.getElementById('paymentMode').value;
     const discountValue = parseFloat(document.getElementById('discount').value) || 0;
     const total = currentBillItems.reduce((sum, item) => sum + item.amount, 0);
     const discountAmount = total * (discountValue / 100);
     const final = total - discountAmount;
-    
-    if (!patientName || !doctorName || currentBillItems.length === 0) {
-        alert('Please fill patient details and add at least one medicine');
+
+    // Only check if there are medicines in the bill
+    if (currentBillItems.length === 0) {
+        alert('Please add at least one medicine to the bill');
         return;
     }
 
     const now = new Date();
     const billNumber = `AM-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${bills.length + 1}`;
     
-    // Build patient details dynamically
-    let patientDetailsHTML = `
-        <p><strong>Patient:</strong> ${patientName}</p>
-        <p><strong>Doctor:</strong> ${doctorName}</p>
-    `;
+    // Build patient details dynamically - no mandatory fields
+    let patientDetailsHTML = '';
+    const details = [];
     
-    // Add other patient information only if available
-    const patientInfoItems = [];
+    if (patientName && patientName.trim() !== '') {
+        details.push(`<strong>Patient:</strong> ${patientName}`);
+    }
     
     if (patientAge && patientAge.trim() !== '') {
-        patientInfoItems.push(`<strong>Age:</strong> ${patientAge}`);
+        details.push(`<strong>Age:</strong> ${patientAge}`);
     }
     
     if (patientGender && patientGender.trim() !== '') {
-        patientInfoItems.push(`<strong>Gender:</strong> ${patientGender}`);
+        details.push(`<strong>Gender:</strong> ${patientGender}`);
     }
     
-    if (patientInfoItems.length > 0) {
-        patientDetailsHTML = `
-            <p><strong>Patient:</strong> ${patientName} | ${patientInfoItems.join(' | ')}</p>
-            <p><strong>Doctor:</strong> ${doctorName}</p>
-        `;
+    if (details.length > 0) {
+        patientDetailsHTML = `<p>${details.join(' | ')}</p>`;
     }
     
-    // Add phone if available
+    if (doctorName && doctorName.trim() !== '') {
+        patientDetailsHTML += `<p><strong>Doctor:</strong> ${doctorName}</p>`;
+    }
+    
     if (patientPhone && patientPhone.trim() !== '') {
         patientDetailsHTML += `<p><strong>Phone:</strong> ${patientPhone}</p>`;
     }
     
-    // Add payment mode
-    patientDetailsHTML += `<p><strong>Payment Mode:</strong> ${paymentMode}</p>`;
+    if (patientAddress && patientAddress.trim() !== '') {
+        patientDetailsHTML += `<p><strong>Address:</strong> ${patientAddress}</p>`;
+    }
+    
+    if (paymentMode) {
+        patientDetailsHTML += `<p><strong>Payment Mode:</strong> ${paymentMode}</p>`;
+    }
     
     const billContent = document.getElementById('billContent');
     billContent.innerHTML = `
@@ -1424,9 +1431,236 @@ B.V. Nagar, Nellore - 524 004.</p>
             </div>
         </div>
         
-        <div class="bill-details">
-            ${patientDetailsHTML}
+        ${patientDetailsHTML ? `<div class="bill-details">${patientDetailsHTML}</div>` : ''}
+        
+        <table class="bill-table">
+            <thead>
+                <tr>
+                    <th>S.No</th>
+                    <th>Particulars</th>
+                    <th>Batch No.</th>
+                    <th>Exp. Date</th>
+                    <th>Quantity</th>
+                    <th>Price</th>
+                    <th>Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${currentBillItems.map(item => `
+                    <tr>
+                        <td>${item.sno}</td>
+                        <td>${item.name}</td>
+                        <td>${item.batchNo}</td>
+                        <td>${item.expiryDate}</td>
+                        <td>${item.quantity} ${item.unit || ''}</td>
+                        <td>₹${item.price.toFixed(2)}</td>
+                        <td>₹${item.amount.toFixed(2)}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        
+        <div class="bill-total">
+            <p><strong>Sub Total:</strong> ₹${total.toFixed(2)}</p>
+            ${discountValue > 0 ? `<p><strong>Discount (${discountValue}%):</strong> ₹${discountAmount.toFixed(2)}</p>` : ''}
+            <p><strong>Final Amount:</strong> ₹${final.toFixed(2)}</p>
+            <p style="margin-top: 1rem;"><strong>Amount in Words:</strong> ${numberToWords(final)}</p>
         </div>
+        
+        <div class="center-text">
+            <p>Thank you for visiting!</p>
+        </div>
+    `;
+    
+    document.getElementById('billPreviewModal').classList.add('active');
+}
+
+
+// ... (rest of the code remains the same until saveBill function) ...
+
+// Save bill
+function saveBill() {
+    const patientName = document.getElementById('patientName').value;
+    const doctorName = document.getElementById('doctorName').value;
+    const patientAge = document.getElementById('patientAge').value;
+    const patientGender = document.getElementById('patientGender').value;
+    const patientPhone = document.getElementById('patientPhone').value;
+    const patientAddress = document.getElementById('patientAddress').value;
+    const paymentMode = document.getElementById('paymentMode').value;
+    const discountValue = parseFloat(document.getElementById('discount').value) || 0;
+
+    // Check if there are medicines in the bill
+    if (currentBillItems.length === 0) {
+        alert('Please add at least one medicine to the bill');
+        return;
+    }
+
+    // Show warning if essential fields are missing but allow to proceed
+    let warningMessage = '';
+    const missingFields = [];
+    
+    if (!patientName || patientName.trim() === '') {
+        missingFields.push('Patient Name');
+    }
+    
+    if (!doctorName || doctorName.trim() === '') {
+        missingFields.push('Doctor Name');
+    }
+    
+    if (missingFields.length > 0) {
+        const proceed = confirm(`The following information is missing:\n\n${missingFields.join('\n')}\n\nDo you still want to save the bill?`);
+        if (!proceed) {
+            return; // User chose not to proceed
+        }
+    }
+
+    const now = new Date().toISOString().split('T')[0];
+    
+    // Update medicine quantities and last sale date
+    currentBillItems.forEach(item => {
+        const medicine = medicines.find(m => m.id === item.medId);
+        if (medicine) {
+            medicine.quantity -= item.quantity;
+            medicine.lastSaleDate = now;
+        }
+    });
+
+    const billNumber = `AM-${new Date().getFullYear()}${String(new Date().getMonth()+1).padStart(2,'0')}${String(new Date().getDate()).padStart(2,'0')}-${bills.length + 1}`;
+    
+    const bill = {
+        id: bills.length + 1,
+        billNumber,
+        date: new Date().toISOString(),
+        patientName: patientName || 'Not Provided',
+        doctorName: doctorName || 'Not Provided',
+        patientAge,
+        patientGender,
+        patientPhone,
+        patientAddress,
+        paymentMode,
+        discount: discountValue,
+        items: [...currentBillItems],
+        total: currentBillItems.reduce((sum, item) => sum + item.amount, 0)
+    };
+
+    bills.push(bill);
+    
+    // Save patient only if name is provided
+    if (patientName && patientName.trim() !== '' && patientName !== 'Not Provided') {
+        const existingPatientIndex = patients.findIndex(p => p.name.toLowerCase() === patientName.toLowerCase());
+        if (existingPatientIndex === -1) {
+            // Add new patient
+            patients.push({
+                id: patients.length + 1,
+                name: patientName,
+                age: patientAge,
+                gender: patientGender,
+                phone: patientPhone,
+                address: patientAddress,
+                lastVisit: new Date().toISOString()
+            });
+        } else {
+            // Update existing patient
+            patients[existingPatientIndex].lastVisit = new Date().toISOString();
+            if (patientPhone) patients[existingPatientIndex].phone = patientPhone;
+            if (patientAddress) patients[existingPatientIndex].address = patientAddress;
+        }
+    }
+
+    // Save to localStorage
+    localStorage.setItem('clinic_bills', JSON.stringify(bills));
+    localStorage.setItem('clinic_patients', JSON.stringify(patients));
+    localStorage.setItem('clinic_medicines', JSON.stringify(medicines));
+
+    showToast('Bill saved successfully!', 'success');
+    clearBill();
+    loadSalesTable();
+    loadMedicinesTable();
+    loadPatientsTable();
+}
+
+// Also update the generateBillPreview function to show warning but proceed
+function generateBillPreview() {
+    const patientName = document.getElementById('patientName').value;
+    const doctorName = document.getElementById('doctorName').value;
+    const patientAge = document.getElementById('patientAge').value;
+    const patientGender = document.getElementById('patientGender').value;
+    const patientPhone = document.getElementById('patientPhone').value;
+    const patientAddress = document.getElementById('patientAddress').value;
+    const paymentMode = document.getElementById('paymentMode').value;
+    const discountValue = parseFloat(document.getElementById('discount').value) || 0;
+    const total = currentBillItems.reduce((sum, item) => sum + item.amount, 0);
+    const discountAmount = total * (discountValue / 100);
+    const final = total - discountAmount;
+
+    // Only check if there are medicines in the bill
+    if (currentBillItems.length === 0) {
+        alert('Please add at least one medicine to the bill');
+        return;
+    }
+
+    const now = new Date();
+    const billNumber = `AM-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${bills.length + 1}`;
+    
+    // Build patient details dynamically
+    let patientDetailsHTML = '';
+    const details = [];
+    
+    // Add patient name if available
+    if (patientName && patientName.trim() !== '') {
+        details.push(`<strong>Patient:</strong> ${patientName}`);
+    }
+    
+    // Add age if available
+    if (patientAge && patientAge.trim() !== '') {
+        details.push(`<strong>Age:</strong> ${patientAge}`);
+    }
+    
+    // Add gender if available
+    if (patientGender && patientGender.trim() !== '') {
+        details.push(`<strong>Gender:</strong> ${patientGender}`);
+    }
+    
+    // Build first line with patient info
+    if (details.length > 0) {
+        patientDetailsHTML = `<p>${details.join(' | ')}</p>`;
+    }
+    
+    // Add doctor if available
+    if (doctorName && doctorName.trim() !== '') {
+        patientDetailsHTML += `<p><strong>Doctor:</strong> ${doctorName}</p>`;
+    }
+    
+    // Add phone if available
+    if (patientPhone && patientPhone.trim() !== '') {
+        patientDetailsHTML += `<p><strong>Phone:</strong> ${patientPhone}</p>`;
+    }
+    
+    // Add address if available
+    if (patientAddress && patientAddress.trim() !== '') {
+        patientDetailsHTML += `<p><strong>Address:</strong> ${patientAddress}</p>`;
+    }
+    
+    // Add payment mode
+    if (paymentMode) {
+        patientDetailsHTML += `<p><strong>Payment Mode:</strong> ${paymentMode}</p>`;
+    }
+    
+    const billContent = document.getElementById('billContent');
+    billContent.innerHTML = `
+        <div class="bill-header-no-logo">
+            <div class="bill-clinic-info">
+                <h2>ANASUYA MEDICALS & FANCY</h2>
+                <p>D.No. 26/3/1564, Near GVRR College,
+B.V. Nagar, Nellore - 524 004.</p>
+                <p>Phone: +91 8309303688 | Email: anasuyamedicals242@gmail.com</p>
+                <hr style="margin: 0.5rem 0;">
+                <h3>MEDICINE BILL</h3>
+                <p>Bill No: ${billNumber} | Date: ${now.toLocaleDateString()} | Time: ${now.toLocaleTimeString()}</p>
+            </div>
+        </div>
+        
+        ${patientDetailsHTML ? `<div class="bill-details">${patientDetailsHTML}</div>` : ''}
         
         <table class="bill-table">
             <thead>
@@ -1471,84 +1705,6 @@ B.V. Nagar, Nellore - 524 004.</p>
 }
 
 // ... (rest of the code remains the same) ...
-// Save bill
-function saveBill() {
-    const patientName = document.getElementById('patientName').value;
-    const doctorName = document.getElementById('doctorName').value;
-    const patientAge = document.getElementById('patientAge').value;
-    const patientGender = document.getElementById('patientGender').value;
-    const patientPhone = document.getElementById('patientPhone').value;
-    const patientAddress = document.getElementById('patientAddress').value;
-    const paymentMode = document.getElementById('paymentMode').value;
-    const discountValue = parseFloat(document.getElementById('discount').value) || 0;
-
-    if (!patientName || !doctorName || currentBillItems.length === 0) {
-        alert('Please fill patient details and add at least one medicine');
-        return;
-    }
-
-    const now = new Date().toISOString().split('T')[0];
-    
-    // Update medicine quantities and last sale date
-    currentBillItems.forEach(item => {
-        const medicine = medicines.find(m => m.id === item.medId);
-        if (medicine) {
-            medicine.quantity -= item.quantity;
-            medicine.lastSaleDate = now;
-        }
-    });
-
-    const billNumber = `AM-${new Date().getFullYear()}${String(new Date().getMonth()+1).padStart(2,'0')}${String(new Date().getDate()).padStart(2,'0')}-${bills.length + 1}`;
-    
-    const bill = {
-        id: bills.length + 1,
-        billNumber,
-        date: new Date().toISOString(),
-        patientName,
-        doctorName,
-        patientAge,
-        patientGender,
-        patientPhone,
-        patientAddress,
-        paymentMode,
-        discount: discountValue,
-        items: [...currentBillItems],
-        total: currentBillItems.reduce((sum, item) => sum + item.amount, 0)
-    };
-
-    bills.push(bill);
-    
-    // Save patient if new or update existing
-    const existingPatientIndex = patients.findIndex(p => p.name.toLowerCase() === patientName.toLowerCase());
-    if (existingPatientIndex === -1) {
-        // Add new patient
-        patients.push({
-            id: patients.length + 1,
-            name: patientName,
-            age: patientAge,
-            gender: patientGender,
-            phone: patientPhone,
-            address: patientAddress,
-            lastVisit: new Date().toISOString()
-        });
-    } else {
-        // Update existing patient
-        patients[existingPatientIndex].lastVisit = new Date().toISOString();
-        patients[existingPatientIndex].phone = patientPhone || patients[existingPatientIndex].phone;
-        patients[existingPatientIndex].address = patientAddress || patients[existingPatientIndex].address;
-    }
-
-    // Save to localStorage
-    localStorage.setItem('clinic_bills', JSON.stringify(bills));
-    localStorage.setItem('clinic_patients', JSON.stringify(patients));
-    localStorage.setItem('clinic_medicines', JSON.stringify(medicines));
-
-    showToast('Bill saved successfully!', 'success');
-    clearBill();
-    loadSalesTable();
-    loadMedicinesTable();
-    loadPatientsTable();
-}
 
 // Clear bill
 function clearBill() {
